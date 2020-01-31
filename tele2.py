@@ -1,7 +1,6 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 # coding=utf-8
-# derived from https://github.com/svetlyak40wt/mobile-balance.git
-
+# originally derived from https://github.com/svetlyak40wt/mobile-balance.git
 import requests
 import re
 import json
@@ -42,23 +41,18 @@ def auth(number, password):
     # Only digits: <COUNTRY_CODE><ABC/DEF><PHONE_NUMBER>
     number = cleanup_phone_number(number)
 
-    response = s.get('https://login.tele2.ru/ssotele2/wap/auth/')
-    check_status_code(response, 200)
+    data = dict(client_id='digital-suite-web-app', grant_type='password', username=number, password=password, password_type='password')
 
-    match = re.search(r'value="(.*?)" name="_csrf"', str(response.content))
-    csrf_token = match.group(1)
-    if csrf_token is None:
-        raise BadResponse('CSRF token not found', response)
-
-    data = dict(pNumber=number, password=password, _csrf=csrf_token, authBy='BY_PASS', rememberMe='true')
     response = s.post(
-        'https://login.tele2.ru/ssotele2/wap/auth/submitLoginAndPassword',
-        data=data)
+         'https://msk.tele2.ru/auth/realms/tele2-b2c/protocol/openid-connect/token',
+         data = data)
     check_status_code(response, 200)
-    return s
+    json_data = json.loads(response.text)
+    token = str(json_data['token_type']) + ' ' + str(json_data['access_token'])
+    return s, token
 
-def get_info(s, number):
-    response = s.get('https://my.tele2.ru/api/subscribers/{}/balance'.format(number))
+def get_info(s, token, number):
+    response = s.get('https://my.tele2.ru/api/subscribers/{}/balance'.format(number), headers = {'Authorization': token })
     check_status_code(response, 200)
 
     amount = response.json().get('data', {}).get('value', None)
@@ -66,10 +60,10 @@ def get_info(s, number):
         raise BadResponse('Unable to get balance amount from JSON', response)
     print("Tel: +" + str(number) + " Balance: " + str(amount))
 
-    response = s.get('https://my.tele2.ru/api/subscribers/{}/services'.format(number))
+    response = s.get('https://my.tele2.ru/api/subscribers/{}/services'.format(number), headers = {'Authorization': token })
     check_status_code(response, 200)
     json_data = json.loads(response.text)
-#    print(response.text.encode("utf-8"))
+
     for i, result in enumerate(json_data['data']):
         e = json_data['data'][i]
         if e['status'] == 'CONNECTED':
@@ -80,5 +74,9 @@ def get_info(s, number):
                  print(nam + " [" + str(e['abonentFee']['amount']) + "]")
     print ("")
 
-s = auth("7xxxxxxxxxx", "password")
-get_info(s, "7xxxxxxxxxx")
+s, token = auth("7XXXXXXXXXX", "password")
+get_info(s, token, "7XXXXXXXXXX")
+
+s, token = auth("7XXXXXXXXXX", "password")
+get_info(s, token, "7XXXXXXXXXX")
+get_info(s, token, "7XXXXXXXXXX")
